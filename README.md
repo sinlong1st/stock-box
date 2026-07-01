@@ -45,8 +45,8 @@ uv run pytest
 stocksense/
 ├── indicators.py   # RSI, support, resistance, 52w range      [implemented]
 ├── scorer.py       # weighted composite scoring + interpretation [implemented]
-├── data.py         # yfinance / Alpaca OHLCV ingestion         [stub]
-├── sentiment.py    # Claude sentiment labeling                 [stub]
+├── data.py         # yfinance / Alpaca OHLCV ingestion         [implemented]
+├── sentiment.py    # Claude sentiment labeling                 [implemented]
 ├── scraper.py      # Playwright news scraper                   [stub]
 ├── storage.py      # SQLite history + JSON output files        [stub]
 └── pipeline.py     # analyze(ticker, weights) — main entry     [stub]
@@ -59,6 +59,7 @@ sentiment → pipeline → storage → scraper → dashboard`. See
 
 ## Status
 
-Scaffolded with the pure-math core (`scorer.py`, `indicators.py`) implemented and
-unit-tested. The remaining modules are stubbed with signatures matching the spec
-and raise `NotImplementedError`.
+Implemented and unit-tested: `scorer.py`, `indicators.py`, `data.py` (yfinance),
+and `sentiment.py` (Claude, with graceful fallback to `neutral`). The pipeline
+runs end-to-end. Remaining stubs: `scraper.py` (Playwright) and `storage.py`
+(SQLite/JSON) — the dashboard works but does not yet persist runs or scrape news.
