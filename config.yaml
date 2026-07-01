@@ -1,0 +1,10 @@
+# StockSense default weight config.
+# One file per ticker or strategy. Weights MUST sum to 1.0 (tolerance 0.01).
+# The user tunes these to their current market thesis — never hardcode in Python.
+ticker: AAPL
+weights:
+  price: 0.30
+  rsi: 0.20
+  news: 0.50
+rsi_period: 14
+news_lookback_days: 7
