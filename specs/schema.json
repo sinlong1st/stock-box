@@ -1,0 +1,157 @@
+{
+  "_meta": {
+    "name": "StockSense",
+    "version": "1.0",
+    "description": "Machine-readable specification for StockSense. Use this to generate code — derive all formulas, thresholds, and shapes from here.",
+    "companion": "SPEC.md"
+  },
+
+  "data_input": {
+    "price_history": {
+      "format": "array of OHLCV objects",
+      "minimum_days": 180,
+      "fields": {
+        "date": "ISO 8601 string (YYYY-MM-DD)",
+        "open": "float",
+        "high": "float",
+        "low": "float",
+        "close": "float",
+        "volume": "integer"
+      },
+      "sort_order": "ascending by date"
+    },
+    "news_headlines": {
+      "format": "array of strings",
+      "minimum_count": 1,
+      "lookback_days": 7,
+      "fallback_if_empty": "use sentiment label neutral"
+    },
+    "ticker": "string (e.g. AAPL, TSLA)",
+    "weights": {
+      "description": "User-supplied weight config. Must sum to 1.0 (tolerance 0.01).",
+      "type": "object",
+      "keys": ["price", "rsi", "news"],
+      "example": { "price": 0.3, "rsi": 0.2, "news": 0.5 }
+    }
+  },
+
+  "indicators": {
+    "rsi": {
+      "description": "Relative Strength Index",
+      "period": 14,
+      "formula": {
+        "step1": "delta = close[i] - close[i-1] for each day",
+        "step2": "gain = max(delta, 0), loss = abs(min(delta, 0))",
+        "step3": "avg_gain = rolling_mean(gain, period), avg_loss = rolling_mean(loss, period)",
+        "step4": "rs = avg_gain / avg_loss",
+        "step5": "rsi = 100 - (100 / (1 + rs))"
+      },
+      "use_last_n_values": 1,
+      "fallback_if_insufficient_data": "skip rsi score, redistribute weight to price"
+    },
+    "support": {
+      "description": "Average of the last N local price lows",
+      "local_low_definition": "close[i] < close[i-1] AND close[i] < close[i+1]",
+      "use_last_n_locals": 3,
+      "fallback_if_insufficient_locals": "use min(close) of entire dataset"
+    },
+    "resistance": {
+      "description": "Average of the last N local price highs",
+      "local_high_definition": "close[i] > close[i-1] AND close[i] > close[i+1]",
+      "use_last_n_locals": 3,
+      "fallback_if_insufficient_locals": "use max(close) of entire dataset"
+    },
+    "range_52w": {
+      "description": "52-week (or full dataset) high and low",
+      "low_52w": "min(close) over dataset",
+      "high_52w": "max(close) over dataset",
+      "position_in_range": "(current_price - low_52w) / (high_52w - low_52w)"
+    }
+  },
+
+  "sentiment": {
+    "labels": [
+      { "label": "very_positive", "score": 100, "example": "Strong earnings beat, major partnership, blockbuster product launch" },
+      { "label": "positive",      "score": 75,  "example": "Analyst upgrade, solid guidance, sector tailwind" },
+      { "label": "neutral",       "score": 50,  "example": "Routine filing, no major news" },
+      { "label": "negative",      "score": 25,  "example": "Analyst downgrade, revenue miss, executive departure" },
+      { "label": "very_negative", "score": 0,   "example": "War, sanctions, fraud investigation, bankruptcy risk" }
+    ],
+    "ai_prompt_template": "You are a financial news sentiment classifier.\nGiven the following headlines for ticker {ticker}, assign exactly one label from:\nvery_positive, positive, neutral, negative, very_negative\n\nHeadlines:\n{headlines}\n\nRespond with JSON only: {\"sentiment\": \"<label>\"}",
+    "ai_output_format": { "sentiment": "<label>" }
+  },
+
+  "scoring": {
+    "score_price": {
+      "description": "Higher score when price is closer to 52-week low",
+      "formula": "(1 - position_in_range) * 100",
+      "range": [0, 100]
+    },
+    "score_rsi": {
+      "description": "Higher score when RSI is lower (oversold). Lower score when overbought.",
+      "formula": {
+        "if_rsi_lte_30": 100,
+        "if_rsi_gte_70": 0,
+        "otherwise": "(70 - rsi) / 40 * 100"
+      },
+      "range": [0, 100]
+    },
+    "score_news": {
+      "description": "Direct mapping from sentiment label to numeric score. See sentiment.labels.",
+      "range": [0, 100]
+    },
+    "composite": {
+      "description": "Weighted average of all sub-scores",
+      "formula": "(score_price * weight.price) + (score_rsi * weight.rsi) + (score_news * weight.news)",
+      "range": [0, 100],
+      "weight_validation": {
+        "rule": "sum of all weights must equal 1.0",
+        "tolerance": 0.01,
+        "on_failure": "raise error before computing"
+      }
+    },
+    "interpretation": [
+      { "min": 75, "max": 100, "label": "Strong positive signal",  "action": "Worth serious consideration" },
+      { "min": 55, "max": 74,  "label": "Mild positive signal",    "action": "Monitor closely, seek confirmation" },
+      { "min": 45, "max": 54,  "label": "Neutral",                 "action": "No clear edge, wait" },
+      { "min": 25, "max": 44,  "label": "Mild negative signal",    "action": "Caution, avoid new positions" },
+      { "min": 0,  "max": 24,  "label": "Strong negative signal",  "action": "High risk, stay out" }
+    ]
+  },
+
+  "output": {
+    "format": "JSON",
+    "shape": {
+      "ticker": "string",
+      "timestamp": "ISO 8601 datetime string",
+      "weights_used": { "price": "float", "rsi": "float", "news": "float" },
+      "technicals": {
+        "current_price": "float",
+        "rsi": "float",
+        "support": "float",
+        "resistance": "float",
+        "low_52w": "float",
+        "high_52w": "float",
+        "position_in_range": "float (0-1)"
+      },
+      "sentiment_label": "string (one of sentiment.labels[].label)",
+      "sub_scores": {
+        "score_price": "float (0-100)",
+        "score_rsi": "float (0-100)",
+        "score_news": "float (0-100)"
+      },
+      "final_score": "float (0-100)",
+      "signal": "string (one of scoring.interpretation[].label)",
+      "action": "string (one of scoring.interpretation[].action)",
+      "flags": "array of strings (warnings, e.g. insufficient data, no news found)"
+    }
+  },
+
+  "defaults": {
+    "rsi_period": 14,
+    "support_resistance_locals": 3,
+    "news_lookback_days": 7,
+    "minimum_price_history_days": 180,
+    "weights": { "price": 0.3, "rsi": 0.2, "news": 0.5 }
+  }
+}
