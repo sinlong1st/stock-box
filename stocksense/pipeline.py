@@ -20,6 +20,7 @@ def analyze(
     scrape_news: bool = False,
     rsi_period: int = indicators.DEFAULT_RSI_PERIOD,
     persist: bool = False,
+    prices=None,
 ) -> dict:
     """Run the full pipeline for one ticker and return the result dict.
 
@@ -28,13 +29,15 @@ def analyze(
     - ``scrape_news``: enable the (fragile) Playwright scraper. Off by default so
       the pipeline stays deterministic/offline unless explicitly asked.
     - ``persist``: when True, save the run to SQLite and write an outputs/*.json.
+    - ``prices``: optional pre-fetched OHLCV DataFrame (schema.json shape) to reuse
+      instead of fetching again — lets a caller chart the same data it scored on.
 
     Validates weights up front (raises before any compute on bad weights).
     """
     scorer.validate_weights(weights)
     flags: list[str] = []
 
-    df = data.fetch_ohlcv(ticker)
+    df = data.fetch_ohlcv(ticker) if prices is None else prices
     close = df["close"]
     if len(df) < data.MINIMUM_DAYS:
         flags.append(f"insufficient_price_history_{len(df)}_days")
