@@ -47,10 +47,10 @@ stocksense/
 ├── scorer.py       # weighted composite scoring + interpretation [implemented]
 ├── data.py         # yfinance / Alpaca OHLCV ingestion         [implemented]
 ├── sentiment.py    # Claude sentiment labeling                 [implemented]
-├── scraper.py      # Playwright news scraper                   [stub]
-├── storage.py      # SQLite history + JSON output files        [stub]
-└── pipeline.py     # analyze(ticker, weights) — main entry     [stub]
-dashboard.py        # Streamlit UI                              [stub]
+├── scraper.py      # Playwright news scraper                   [implemented]
+├── storage.py      # SQLite history + JSON output files        [implemented]
+└── pipeline.py     # analyze(ticker, weights) — main entry     [implemented]
+dashboard.py        # Streamlit UI                              [implemented]
 ```
 
 Build order (each layer depends on the one above): `scorer → indicators → data →
@@ -59,7 +59,13 @@ sentiment → pipeline → storage → scraper → dashboard`. See
 
 ## Status
 
-Implemented and unit-tested: `scorer.py`, `indicators.py`, `data.py` (yfinance),
-and `sentiment.py` (Claude, with graceful fallback to `neutral`). The pipeline
-runs end-to-end. Remaining stubs: `scraper.py` (Playwright) and `storage.py`
-(SQLite/JSON) — the dashboard works but does not yet persist runs or scrape news.
+All modules implemented. The pipeline runs end-to-end, persists runs to SQLite +
+`outputs/*.json`, and the dashboard shows score history. The `scorer`, `indicators`,
+`data`, `sentiment`, and `storage` layers are unit-tested (mocks/temp files, no
+network). Two integrations need external setup to run live:
+- **News scraping** — `uv run playwright install chromium` (fragile; degrades to
+  no-news → `neutral` sentiment on any failure).
+- **AI sentiment** — `ANTHROPIC_API_KEY` in `.env`.
+
+`data.py` falls back to Yahoo's chart API when `fc.yahoo.com` (yfinance's cookie
+host) is blocked, and defaults to a `1y` window to satisfy the 180-row minimum.
